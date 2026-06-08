@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'oauth2_provider',
     'corsheaders',
+    'drf_spectacular',
 
     # Local apps
     'apps.users',
@@ -92,6 +93,7 @@ MIDDLEWARE = [
 AUTH_USER_MODEL = 'users.User'
 
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
         'rest_framework.authentication.SessionAuthentication',
@@ -106,10 +108,6 @@ AUTHENTICATION_BACKENDS = (
     'oauth2_provider.backends.OAuth2Backend',
 )
 
-CSRF_TRUSTED_ORIGINS = os.environ.get(
-    "CSRF_TRUSTED_ORIGINS",
-    "https://bengalafc-api-production.up.railway.app"
-).split(",")
 
 # CORS Settings (Allow everything for now as requested for web app communication)
 CORS_ALLOW_ALL_ORIGINS = True
@@ -201,3 +199,11 @@ FOOTBALL_API_HEADER = os.getenv('FOOTBALL_API_HEADER', 'x-apisports-key')
 # Login Redirect Settings
 LOGIN_REDIRECT_URL = '/hello/'
 LOGIN_URL = '/accounts/login/'
+
+# DRF Spectacular Settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Bengala FC API ⚽🏆',
+    'DESCRIPTION': 'Documentação dos endpoints da API do Bengala FC.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
