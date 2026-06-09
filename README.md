@@ -33,7 +33,7 @@ A API do Bengala FC foi projetada para atender a duas frentes principais:
 - **Autenticação**: OAuth2 via [Django OAuth Toolkit 3.2.x](https://django-oauth-toolkit.readthedocs.io/)
 - **Processamento de Imagem**: [Pillow 12.2.x](https://python-pillow.org/) (usado nas fotos dos perfis)
 - **Segurança CORS**: [django-cors-headers](https://github.com/adamchainz/django-cors-headers)
-- **Banco de Dados**: SQLite (padrão local `db.sqlite3` incluído no projeto)
+- **Banco de Dados**: PostgreSQL (Railway) / SQLite (padrão local `db.sqlite3` incluído no projeto)
 - **Gerenciador de Pacotes**: `uv` (ou standard pip/venv)
 
 ---
@@ -78,7 +78,7 @@ pip install -r pyproject.toml
 ```
 
 ### 4. Executar Migrações do Banco de Dados
-Para inicializar a estrutura do banco SQLite local:
+Para inicializar a estrutura do banco (seja o SQLite local padrão ou o PostgreSQL do Railway configurado pelas variáveis `DATABASE_URL` ou `DATABASE_PUBLIC_URL`):
 
 ```bash
 .venv/bin/python src/manage.py migrate
