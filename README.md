@@ -129,15 +129,47 @@ Use o `access_token` retornado no header de todas as requisições autenticadas:
 
 ## 🔄 Sincronização de Dados de Futebol
 
-Para carregar dados reais e estatísticas de torneios (como a Copa do Mundo 2022) no seu banco de dados, execute o comando consolidado:
+Para carregar dados reais e estatísticas de torneios no banco de dados, execute os comandos na ordem abaixo.
 
+### Importação Completa (Copa do Mundo 2022)
+
+#### 1. Importar Partidas
+```bash
+.venv/bin/python src/manage.py import_fixtures src/data/fifa_wc_2022_combined.csv
+```
+
+#### 2. Importar Estatísticas de Jogadores por Fase
+```bash
+.venv/bin/python src/manage.py import_player_stats src/data/fifa_wc_2022_combined.csv --stage "Fase de Grupos"
+```
+
+#### 3. Importar Estatísticas de Times por Fase
+```bash
+.venv/bin/python src/manage.py import_team_stats src/data/fifa_wc_2022_combined.csv --stage "Fase de Grupos"
+```
+
+#### 4. Importar Estatísticas de Goleiros por Fase
+```bash
+.venv/bin/python src/manage.py import_goalkeeper src/data/goalkeeper_stats_wc2022_group_stage.csv --stage "Fase de Grupos"
+```
+
+> [!NOTE]
+> O arquivo `goalkeeper_stats_wc2022_group_stage.csv` deve estar em `src/data/` e conter as colunas:
+> `player_name`, `team_name`, `saves`, `goals_against`
+> Os dados de saves e gols sofridos são distribuídos proporcionalmente entre as partidas da fase para cada goleiro.
+
+> [!TIP]
+> Para limpar todos os dados importados e reimportar do zero:
+> ```bash
+> .venv/bin/python src/manage.py clear_fifa_data
+> ```
+
+### Sincronização via API Externa (API-Football)
+Para sincronizar dados de outras competições em tempo real:
 ```bash
 .venv/bin/python src/manage.py sync_all --competition-id 1 --season 2022
 ```
-
-Se desejar executar a sincronização em etapas individuais (equipes, jogadores, fases, etc.), consulte o [README interno do módulo de futebol](file:///home/jader/Projects/bengalafc-api/src/apps/football/README.md).
-
----
+Requer a variável `FOOTBALL_API_KEY` configurada no `.env`.
 
 ## 📡 Endpoints da API
 
