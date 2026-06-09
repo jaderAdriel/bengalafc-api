@@ -198,6 +198,8 @@ class PlayerStatistic(models.Model):
     shots_on_target = models.IntegerField(
         default=0, verbose_name="Chutes no Gol"
     )
+    goals_conceded = models.IntegerField(default=0, verbose_name="Gols Sofridos")
+    saves = models.IntegerField(default=0, verbose_name="Defesas")
     passes = models.IntegerField(default=0, verbose_name="Passes")
     key_passes = models.IntegerField(default=0, verbose_name="Passes Decisivos")
     tackles = models.IntegerField(default=0, verbose_name="Desarmes")
