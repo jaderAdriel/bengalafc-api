@@ -61,7 +61,7 @@ class PlayerViewSet(viewsets.ModelViewSet):
         if team_external_id:
             queryset = queryset.filter(team__external_id=team_external_id)
         if position:
-            queryset = queryset.filter(position__iexact=position)
+            queryset = queryset.filter(position__icontains=position)
         if nationality:
             queryset = queryset.filter(nationality__iexact=nationality)
 
