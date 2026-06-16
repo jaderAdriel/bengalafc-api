@@ -61,6 +61,11 @@ class StageSerializer(serializers.ModelSerializer):
             "competition_detail",
             "name",
             "order",
+            "starts_at",
+            "lineup_deadline_at",
+            "ends_at",
+            "finished_at",
+            "is_current",
         ]
 
 

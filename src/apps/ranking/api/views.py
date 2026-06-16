@@ -3,6 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from apps.ranking.models import Friendship
+from apps.scores.models import FantasyLineup
+from apps.scores.services import calculate_lineup_score
 from .serializers import RankingUserSerializer
 
 User = get_user_model()
@@ -14,14 +16,8 @@ class RankingViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get'], url_path='global')
     def global_ranking(self, request):
-        # Todos os usuários ordenados por pontos
-        queryset = User.objects.order_by('-points')
-
-        # Injeta a posição em cada objeto
-        users_with_position = []
-        for index, user in enumerate(queryset, start=1):
-            user.position = index
-            users_with_position.append(user)
+        queryset = User.objects.all()
+        users_with_position = self._rank_users(queryset)
 
         serializer = self.get_serializer(users_with_position, many=True)
         return Response(serializer.data)
@@ -36,15 +32,41 @@ class RankingViewSet(viewsets.GenericViewSet):
         # Inclui o próprio usuário no ranking de amigos
         queryset = User.objects.filter(
             id__in=list(friend_ids) + [request.user.id]
-        ).order_by('-points')
-
-        users_with_position = []
-        for index, user in enumerate(queryset, start=1):
-            user.position = index
-            users_with_position.append(user)
+        )
+        users_with_position = self._rank_users(queryset)
 
         serializer = self.get_serializer(users_with_position, many=True)
         return Response(serializer.data)
+
+    def _rank_users(self, queryset):
+        users = list(queryset.order_by('id'))
+        user_map = {user.id: user for user in users}
+
+        lineups = FantasyLineup.objects.filter(
+            user_id__in=user_map.keys(),
+        ).select_related(
+            'user',
+            'stage',
+            'captain',
+            'coach',
+            'coach__team',
+        ).prefetch_related(
+            'players',
+            'players__player',
+        )
+
+        points_by_user = {user.id: 0.0 for user in users}
+        for lineup in lineups:
+            points_by_user[lineup.user_id] += calculate_lineup_score(lineup)
+
+        for user in users:
+            user.ranking_points = points_by_user[user.id]
+
+        users.sort(key=lambda user: (-user.ranking_points, user.username.lower(), user.id))
+        for index, user in enumerate(users, start=1):
+            user.position = index
+
+        return users
 
     @action(detail=False, methods=['post'], url_path='friends/add')
     def add_friend(self, request):

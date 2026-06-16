@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db.models import Avg
 from django.db import models as django_models
 from .models import Player, ScoreEvent
 
@@ -115,6 +116,65 @@ def calculate_lineup_statistic_points(stat) -> float:
     shots_fora = (stat.shots or 0) - (stat.shots_on_target or 0)
     if shots_fora > 0:
         total_points += GENERAL_POINTS['finalizacao_fora'] * shots_fora
+
+    return total_points
+
+
+def calculate_lineup_score(lineup, include_items=False):
+    """Calcula a pontuação real de uma escalação em sua fase."""
+    from apps.football.models import PlayerStatistic
+
+    lineup_players = list(lineup.players.select_related('player'))
+    lineup_player_ids = [entry.player_id for entry in lineup_players]
+
+    stats = PlayerStatistic.objects.filter(
+        fixture__stage=lineup.stage,
+        player_id__in=lineup_player_ids,
+    ).select_related('player', 'fixture').order_by('fixture__kickoff_at', 'player__name')
+
+    items = []
+    total_points = 0.0
+
+    for stat in stats:
+        points = calculate_lineup_statistic_points(stat)
+        is_captain = stat.player_id == lineup.captain_id
+        if is_captain:
+            points *= 2
+
+        total_points += points
+        if include_items:
+            items.append({
+                'fixture': stat.fixture_id,
+                'fixture_external_id': stat.fixture.external_id,
+                'player': stat.player_id,
+                'player_name': stat.player.name,
+                'is_captain': is_captain,
+                'points': points,
+            })
+
+    if lineup.coach:
+        result = PlayerStatistic.objects.filter(
+            fixture__stage=lineup.stage,
+            player__team=lineup.coach.team,
+            minutes__gt=0,
+            rating__isnull=False,
+        ).aggregate(media=Avg('rating'))
+
+        coach_points = float(result['media'] or 0.0)
+        total_points += coach_points
+
+        if include_items:
+            items.append({
+                'fixture': None,
+                'player': None,
+                'player_name': lineup.coach.name,
+                'is_captain': False,
+                'is_coach': True,
+                'points': coach_points,
+            })
+
+    if include_items:
+        return total_points, items
 
     return total_points
 

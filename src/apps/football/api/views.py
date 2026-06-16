@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import permissions, viewsets
 from apps.football.models import (
     Competition,
@@ -55,6 +56,7 @@ class PlayerViewSet(viewsets.ModelViewSet):
         team_external_id = self.request.query_params.get("team_external_id")
         position = self.request.query_params.get("position")
         nationality = self.request.query_params.get("nationality")
+        stage_id = self.request.query_params.get("stage")
 
         if team_id:
             queryset = queryset.filter(team_id=team_id)
@@ -64,6 +66,11 @@ class PlayerViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(position__icontains=position)
         if nationality:
             queryset = queryset.filter(nationality__iexact=nationality)
+        if stage_id:
+            stage_team_filter = Q(team__home_fixtures__stage_id=stage_id) | Q(
+                team__away_fixtures__stage_id=stage_id
+            )
+            queryset = queryset.filter(stage_team_filter).distinct()
 
         return queryset
 
@@ -197,4 +204,3 @@ class CoachViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(is_active=is_active_bool)
 
         return queryset
-

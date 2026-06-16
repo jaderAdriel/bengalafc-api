@@ -110,10 +110,30 @@ class Stage(models.Model):
     )
     name = models.CharField(max_length=255, verbose_name="Nome da Fase")
     order = models.IntegerField(default=0, verbose_name="Ordem de Exibição")
+    starts_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Início"
+    )
+    lineup_deadline_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Prazo para escalação"
+    )
+    ends_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Fim previsto"
+    )
+    finished_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Finalizada em"
+    )
+    is_current = models.BooleanField(default=False, verbose_name="Fase atual")
 
     class Meta:
         unique_together = ("competition", "name")
         ordering = ["order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("competition",),
+                condition=models.Q(is_current=True),
+                name="unique_current_stage_per_competition",
+            )
+        ]
         verbose_name = "Fase"
         verbose_name_plural = "Fases"
 

@@ -89,6 +89,18 @@ class FantasyLineup(models.Model):
         related_name='fantasy_lineups',
         verbose_name='Técnico'
     )
+    final_points = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Pontuação final',
+    )
+    finalized_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Finalizada em',
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -160,4 +172,3 @@ class FantasyTransfer(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.stage.name}"
-

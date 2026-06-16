@@ -40,6 +40,24 @@ class FootballAPITestCase(APITestCase):
             external_id=154, name="Lionel Messi", team=self.team
         )
 
+    def test_players_can_be_filtered_by_stage_teams(self) -> None:
+        outside_team = Team.objects.create(
+            external_id=55, name="Brazil", code="BRA"
+        )
+        outside_player = Player.objects.create(
+            external_id=999,
+            name="Outside Player",
+            team=outside_team,
+            position="Attacker",
+        )
+
+        response = self.client.get(reverse("player-list"), {"stage": self.stage.id})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        player_ids = {item["id"] for item in response.data}
+        self.assertIn(self.player.id, player_ids)
+        self.assertNotIn(outside_player.id, player_ids)
+
     def test_get_endpoints_anonymous(self) -> None:
         """Verifica que usuários não autenticados conseguem listar dados (Read-Only)."""
         endpoints = [

@@ -55,6 +55,17 @@ class FantasyLineupAPITestCase(APITestCase):
             name='Zagueiro 1',
             position='Defender',
         )
+        self.outside_team = Team.objects.create(
+            external_id=3,
+            name='França',
+            code='FRA',
+        )
+        self.outside_player = Player.objects.create(
+            external_id=104,
+            team=self.outside_team,
+            name='Atacante Fora da Fase',
+            position='Attacker',
+        )
         self.client.force_authenticate(user=self.user)
 
     def test_create_lineup_for_stage(self):
@@ -72,6 +83,20 @@ class FantasyLineupAPITestCase(APITestCase):
         self.assertEqual(FantasyLineup.objects.count(), 1)
         self.assertEqual(response.data['captain'], self.player_1.id)
         self.assertEqual(len(response.data['players']), 2)
+
+    def test_create_lineup_rejects_player_outside_stage_teams(self):
+        response = self.client.post(
+            reverse('lineup-list'),
+            {
+                'stage': self.stage.id,
+                'player_ids': [self.player_1.id, self.outside_player.id],
+                'captain_id': self.player_1.id,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('player_ids', response.data)
 
     def test_update_lineup_changes_captain_and_records_transfers(self):
         lineup = FantasyLineup.objects.create(

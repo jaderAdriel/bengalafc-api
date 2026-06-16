@@ -9,6 +9,7 @@ from ..models import (
     ScoreEvent,
 )
 from apps.football.models import Coach as FootballCoach
+from apps.football.models import Fixture
 
 class PlayerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -90,6 +91,7 @@ class FantasyLineupSerializer(serializers.ModelSerializer):
         captain_id = attrs.get('captain_id')
         coach_id = attrs.get('coach_id')
         request = self.context.get('request')
+        stage = attrs.get('stage')
 
         if coach_id and not FootballCoach.objects.filter(id=coach_id).exists():
             raise serializers.ValidationError({'coach_id': 'Técnico não encontrado.'})
@@ -98,13 +100,55 @@ class FantasyLineupSerializer(serializers.ModelSerializer):
             current_player_ids = list(self.instance.players.values_list('player_id', flat=True))
             player_ids = player_ids if player_ids is not None else current_player_ids
             captain_id = captain_id if captain_id is not None else self.instance.captain_id
-        elif request and FantasyLineup.objects.filter(user=request.user, stage=attrs.get('stage')).exists():
+            stage = stage if stage is not None else self.instance.stage
+            coach_id = coach_id if coach_id is not None else self.instance.coach_id
+        elif request and FantasyLineup.objects.filter(user=request.user, stage=stage).exists():
             raise serializers.ValidationError({'stage': 'Você já possui escalação para esta fase.'})
 
         if player_ids and captain_id not in player_ids:
             raise serializers.ValidationError({'captain_id': 'O capitão precisa estar na escalação.'})
 
+        if stage is not None:
+            allowed_team_ids = self._stage_team_ids(stage.id)
+            if allowed_team_ids:
+                invalid_players = FootballPlayer.objects.filter(
+                    id__in=player_ids,
+                ).exclude(team_id__in=allowed_team_ids)
+                if invalid_players.exists():
+                    names = ', '.join(
+                        invalid_players.order_by('name').values_list('name', flat=True)
+                    )
+                    raise serializers.ValidationError({
+                        'player_ids': (
+                            'A escalação só pode ter jogadores das seleções '
+                            f'que jogam nesta fase. Fora da fase: {names}.'
+                        )
+                    })
+
+                if coach_id:
+                    coach_in_stage = FootballCoach.objects.filter(
+                        id=coach_id,
+                        team_id__in=allowed_team_ids,
+                    ).exists()
+                    if not coach_in_stage:
+                        raise serializers.ValidationError({
+                            'coach_id': 'O técnico precisa ser de uma seleção que joga nesta fase.'
+                        })
+
         return attrs
+
+    def _stage_team_ids(self, stage_id):
+        team_ids = set()
+        fixtures = Fixture.objects.filter(stage_id=stage_id).values_list(
+            'home_team_id',
+            'away_team_id',
+        )
+        for home_team_id, away_team_id in fixtures:
+            if home_team_id:
+                team_ids.add(home_team_id)
+            if away_team_id:
+                team_ids.add(away_team_id)
+        return team_ids
 
     def create(self, validated_data):
         player_ids = validated_data.pop('player_ids')

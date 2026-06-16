@@ -1,4 +1,4 @@
-from django.db.models import Prefetch, Avg
+from django.db.models import Prefetch
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -8,9 +8,8 @@ from .serializers import (
     PlayerSerializer,
     ScoreEventSerializer,
 )
-from apps.football.models import PlayerStatistic
 from apps.scores.models import FantasyLineup, FantasyLineupPlayer, FantasyTransfer, Player, ScoreEvent
-from apps.scores.services import calculate_lineup_statistic_points, create_player, create_coach
+from apps.scores.services import calculate_lineup_score, create_player, create_coach
 
 
 class PlayerViewSet(viewsets.GenericViewSet):
@@ -93,52 +92,7 @@ class FantasyLineupViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='score-history')
     def score_history(self, request, pk=None):
         lineup = self.get_object()
-        lineup_players = list(lineup.players.select_related('player'))
-        lineup_player_ids = [entry.player_id for entry in lineup_players]
-
-        stats = PlayerStatistic.objects.filter(
-            fixture__stage=lineup.stage,
-            player_id__in=lineup_player_ids,
-        ).select_related('player', 'fixture').order_by('fixture__kickoff_at', 'player__name')
-
-        items = []
-        total_points = 0.0
-
-        for stat in stats:
-            points = calculate_lineup_statistic_points(stat)
-            is_captain = stat.player_id == lineup.captain_id
-            if is_captain:
-                points *= 2
-
-            total_points += points
-            items.append({
-                'fixture': stat.fixture_id,
-                'fixture_external_id': stat.fixture.external_id,
-                'player': stat.player_id,
-                'player_name': stat.player.name,
-                'is_captain': is_captain,
-                'points': points,
-            })
-
-        if lineup.coach:
-            resultado = PlayerStatistic.objects.filter(
-                fixture__stage=lineup.stage,
-                player__team=lineup.coach.team,
-                minutes__gt=0,
-                rating__isnull=False
-            ).aggregate(media=Avg("rating"))
-
-            coach_points = float(resultado["media"] or 0.0)
-            total_points += coach_points
-
-            items.append({
-                'fixture': None,
-                'player': None,
-                'player_name': lineup.coach.name,
-                'is_captain': False,
-                'is_coach': True,
-                'points': coach_points,
-            })
+        total_points, items = calculate_lineup_score(lineup, include_items=True)
         return Response({
             'lineup': lineup.id,
             'stage': lineup.stage_id,
