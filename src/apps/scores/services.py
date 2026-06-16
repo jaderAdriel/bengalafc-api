@@ -81,12 +81,14 @@ def calculate_from_statistic(player: Player, stat) -> float:
         )
         total_points += pts
 
-    # Jogo sem sofrer gol (via TeamStatistic)
+    # Jogo sem sofrer gol (via Fixture scores)
     if position in ('goleiro', 'zagueiro', 'lateral'):
-        team_stat = stat.fixture.team_statistics.filter(
-            team=stat.player.team
-        ).first()
-        if team_stat and team_stat.goals_conceded == 0:
+        if stat.player.team == stat.fixture.home_team:
+            goals_conceded = stat.fixture.away_score
+        else:
+            goals_conceded = stat.fixture.home_score
+
+        if goals_conceded is not None and goals_conceded == 0:
             pts = POSITION_POINTS[position].get('jogo_sem_sofrer_gol', 0)
             ScoreEvent.objects.get_or_create(
                 player=player,
