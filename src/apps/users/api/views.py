@@ -15,13 +15,21 @@ class UserViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
-        serializer = UserProfileSerializer(request.user.profile)
+        serializer = UserProfileSerializer(
+            request.user.profile,
+            context={'request': request},
+        )
         return Response(serializer.data)
 
     @action(detail=False, methods=['patch'], permission_classes=[permissions.IsAuthenticated],  parser_classes=[MultiPartParser, FormParser, JSONParser])
     def update_profile(self, request):
         profile = request.user.profile
-        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+        serializer = UserProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True,
+            context={'request': request},
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -31,7 +39,11 @@ class UserViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     def profiles(self, request):
         from apps.users.models import UserProfile
         profiles = UserProfile.objects.select_related('user', 'favorite_team').all()
-        serializer = UserProfileSerializer(profiles, many=True)
+        serializer = UserProfileSerializer(
+            profiles,
+            many=True,
+            context={'request': request},
+        )
         return Response(serializer.data)
 
     @action(
@@ -45,7 +57,12 @@ class UserViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
         user = self.get_object()
         from apps.users.models import UserProfile
         profile, _ = UserProfile.objects.get_or_create(user=user)
-        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+        serializer = UserProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True,
+            context={'request': request},
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

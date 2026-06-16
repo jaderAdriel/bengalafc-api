@@ -52,6 +52,10 @@ class CompetitionSerializer(serializers.ModelSerializer):
 
 class StageSerializer(serializers.ModelSerializer):
     competition_detail = CompetitionSerializer(source="competition", read_only=True)
+    is_finished = serializers.SerializerMethodField()
+    is_last_stage = serializers.SerializerMethodField()
+    previous_stage = serializers.SerializerMethodField()
+    next_stage = serializers.SerializerMethodField()
 
     class Meta:
         model = Stage
@@ -66,7 +70,48 @@ class StageSerializer(serializers.ModelSerializer):
             "ends_at",
             "finished_at",
             "is_current",
+            "is_finished",
+            "is_last_stage",
+            "previous_stage",
+            "next_stage",
         ]
+
+    def get_is_finished(self, obj: Stage) -> bool:
+        return obj.finished_at is not None
+
+    def get_is_last_stage(self, obj: Stage) -> bool:
+        stage_ids = self._get_ordered_stage_ids(obj)
+        return bool(stage_ids) and stage_ids[-1] == obj.id
+
+    def get_previous_stage(self, obj: Stage) -> int | None:
+        stage_ids = self._get_ordered_stage_ids(obj)
+        try:
+            current_index = stage_ids.index(obj.id)
+        except ValueError:
+            return None
+        if current_index == 0:
+            return None
+        return stage_ids[current_index - 1]
+
+    def get_next_stage(self, obj: Stage) -> int | None:
+        stage_ids = self._get_ordered_stage_ids(obj)
+        try:
+            current_index = stage_ids.index(obj.id)
+        except ValueError:
+            return None
+        if current_index >= len(stage_ids) - 1:
+            return None
+        return stage_ids[current_index + 1]
+
+    def _get_ordered_stage_ids(self, obj: Stage) -> list[int]:
+        cache = self.context.setdefault("_stage_sequence_cache", {})
+        if obj.competition_id not in cache:
+            cache[obj.competition_id] = list(
+                Stage.objects.filter(competition_id=obj.competition_id)
+                .order_by("order", "id")
+                .values_list("id", flat=True)
+            )
+        return cache[obj.competition_id]
 
 
 class FixtureSerializer(serializers.ModelSerializer):

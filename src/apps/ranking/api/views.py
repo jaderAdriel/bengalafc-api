@@ -16,7 +16,7 @@ class RankingViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get'], url_path='global')
     def global_ranking(self, request):
-        queryset = User.objects.all()
+        queryset = User.objects.select_related('profile').all()
         users_with_position = self._rank_users(queryset)
 
         serializer = self.get_serializer(users_with_position, many=True)
@@ -30,7 +30,7 @@ class RankingViewSet(viewsets.GenericViewSet):
         ).values_list('to_user_id', flat=True)
 
         # Inclui o próprio usuário no ranking de amigos
-        queryset = User.objects.filter(
+        queryset = User.objects.select_related('profile').filter(
             id__in=list(friend_ids) + [request.user.id]
         )
         users_with_position = self._rank_users(queryset)

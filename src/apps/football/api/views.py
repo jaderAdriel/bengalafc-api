@@ -1,5 +1,7 @@
 from django.db.models import Q
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from apps.football.models import (
     Competition,
     Fixture,
@@ -113,6 +115,124 @@ class StageViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(competition__external_id=comp_external_id)
 
         return queryset
+
+    @action(detail=False, methods=["get"], url_path="state")
+    def state(self, request):
+        """Retorna a fase atual, anterior, próxima e status final da competição."""
+        competition = self._get_state_competition()
+        if competition is None:
+            return Response(
+                {"detail": "Competição não encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        stages = list(
+            Stage.objects.filter(competition=competition).order_by("order", "id")
+        )
+        if not stages:
+            return Response(
+                {
+                    "competition": CompetitionSerializer(
+                        competition, context={"request": request}
+                    ).data,
+                    "competition_finished": False,
+                    "has_started": False,
+                    "current_stage": None,
+                    "previous_stage": None,
+                    "next_stage": None,
+                    "last_stage": None,
+                    "stages": [],
+                }
+            )
+
+        current_stage = next((stage for stage in stages if stage.is_current), None)
+        last_stage = stages[-1]
+        finished_stages = [stage for stage in stages if stage.finished_at is not None]
+        previous_stage = self._get_previous_stage(stages, current_stage, finished_stages)
+        next_stage = self._get_next_stage(stages, current_stage)
+        competition_finished = (
+            current_stage is None
+            and last_stage.finished_at is not None
+            and len(finished_stages) == len(stages)
+        )
+
+        serializer_context = {"request": request}
+        return Response(
+            {
+                "competition": CompetitionSerializer(
+                    competition, context=serializer_context
+                ).data,
+                "competition_finished": competition_finished,
+                "has_started": current_stage is not None or bool(finished_stages),
+                "current_stage": self._serialize_stage(current_stage, serializer_context),
+                "previous_stage": self._serialize_stage(
+                    previous_stage, serializer_context
+                ),
+                "next_stage": self._serialize_stage(next_stage, serializer_context),
+                "last_stage": self._serialize_stage(last_stage, serializer_context),
+                "stages": StageSerializer(
+                    stages, many=True, context=serializer_context
+                ).data,
+            }
+        )
+
+    def _get_state_competition(self) -> Competition | None:
+        competition_id = self.request.query_params.get("competition")
+        comp_external_id = self.request.query_params.get("competition_external_id")
+
+        if competition_id:
+            return Competition.objects.filter(id=competition_id).first()
+        if comp_external_id:
+            return Competition.objects.filter(external_id=comp_external_id).first()
+
+        current_stage = (
+            Stage.objects.select_related("competition")
+            .filter(is_current=True)
+            .order_by("-competition__season", "order", "id")
+            .first()
+        )
+        if current_stage:
+            return current_stage.competition
+
+        return Competition.objects.order_by("-season", "name", "id").first()
+
+    def _get_previous_stage(
+        self,
+        stages: list[Stage],
+        current_stage: Stage | None,
+        finished_stages: list[Stage],
+    ) -> Stage | None:
+        if current_stage:
+            current_index = stages.index(current_stage)
+            ordered_previous = stages[:current_index]
+            finished_previous = [
+                stage for stage in ordered_previous if stage.finished_at is not None
+            ]
+            if finished_previous:
+                return finished_previous[-1]
+            return None
+
+        if finished_stages:
+            return finished_stages[-1]
+        return None
+
+    def _get_next_stage(
+        self, stages: list[Stage], current_stage: Stage | None
+    ) -> Stage | None:
+        if current_stage is None:
+            return None
+
+        current_index = stages.index(current_stage)
+        if current_index >= len(stages) - 1:
+            return None
+        return stages[current_index + 1]
+
+    def _serialize_stage(
+        self, stage: Stage | None, serializer_context: dict
+    ) -> dict | None:
+        if stage is None:
+            return None
+        return StageSerializer(stage, context=serializer_context).data
 
 
 class FixtureViewSet(viewsets.ModelViewSet):

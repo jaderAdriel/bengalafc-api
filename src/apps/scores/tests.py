@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -155,6 +156,49 @@ class FantasyLineupAPITestCase(APITestCase):
         self.assertEqual(response.data['stage'], self.stage.id)
         self.assertEqual(response.data['total_points'], 41.0)
         self.assertEqual(len(response.data['items']), 2)
+
+    def test_phase_score_history_includes_zero_for_stage_without_lineup(self):
+        final_stage = Stage.objects.create(
+            competition=self.competition,
+            name='Final',
+            order=2,
+            finished_at=timezone.now(),
+        )
+        lineup = FantasyLineup.objects.create(
+            user=self.user,
+            stage=self.stage,
+            captain=self.player_1,
+        )
+        lineup.players.create(player=self.player_1, order=0)
+
+        PlayerStatistic.objects.create(
+            player=self.player_1,
+            fixture=self.fixture,
+            goals=1,
+        )
+
+        response = self.client.get(
+            reverse('lineup-phase-score-history'),
+            {'competition': self.competition.id},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+
+        first_stage = response.data[0]
+        self.assertEqual(first_stage['stage'], self.stage.id)
+        self.assertTrue(first_stage['has_lineup'])
+        self.assertEqual(first_stage['lineup'], lineup.id)
+        self.assertEqual(first_stage['total_points'], 16.0)
+
+        final = response.data[1]
+        self.assertEqual(final['stage'], final_stage.id)
+        self.assertEqual(final['stage_name'], 'Final')
+        self.assertFalse(final['has_lineup'])
+        self.assertIsNone(final['lineup'])
+        self.assertTrue(final['is_finished'])
+        self.assertEqual(final['total_points'], 0.0)
+        self.assertEqual(final['items'], [])
 
     def test_transfer_list_can_be_filtered_by_stage(self):
         lineup = FantasyLineup.objects.create(

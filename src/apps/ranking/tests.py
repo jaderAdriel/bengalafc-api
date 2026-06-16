@@ -58,6 +58,9 @@ class RankingAPITestCase(APITestCase):
         self.client.force_authenticate(user=self.user)
 
     def test_global_ranking_uses_lineup_score_history_not_user_points(self):
+        self.user.profile.photo.name = 'profiles/manager.jpg'
+        self.user.profile.save(update_fields=['photo'])
+
         lineup = FantasyLineup.objects.create(
             user=self.user,
             stage=self.stage,
@@ -87,6 +90,22 @@ class RankingAPITestCase(APITestCase):
         self.assertEqual(response.data[0]['id'], self.user.id)
         self.assertEqual(response.data[0]['points'], 41.0)
         self.assertEqual(response.data[0]['position'], 1)
+        self.assertEqual(
+            response.data[0]['photo'],
+            'http://testserver/media/profiles/manager.jpg',
+        )
+        self.assertEqual(
+            response.data[0]['photo_url'],
+            'http://testserver/media/profiles/manager.jpg',
+        )
         self.assertEqual(response.data[1]['id'], self.other_user.id)
         self.assertEqual(response.data[1]['points'], 0.0)
         self.assertEqual(response.data[1]['position'], 2)
+        self.assertEqual(
+            response.data[1]['photo'],
+            'http://testserver/media/profiles/default.jpg',
+        )
+        self.assertEqual(
+            response.data[1]['photo_url'],
+            'http://testserver/media/profiles/default.jpg',
+        )

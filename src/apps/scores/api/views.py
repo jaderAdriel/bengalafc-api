@@ -8,6 +8,7 @@ from .serializers import (
     PlayerSerializer,
     ScoreEventSerializer,
 )
+from apps.football.models import Competition, Stage
 from apps.scores.models import FantasyLineup, FantasyLineupPlayer, FantasyTransfer, Player, ScoreEvent
 from apps.scores.services import calculate_lineup_score, create_player, create_coach
 
@@ -89,6 +90,41 @@ class FantasyLineupViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(lineup)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], url_path='phase-score-history')
+    def phase_score_history(self, request):
+        """Retorna todas as fases com a pontuação do usuário, usando 0 quando não há escalação."""
+        competition = self._get_history_competition()
+        if competition is None:
+            return Response([])
+
+        stages = Stage.objects.filter(competition=competition).order_by('order', 'id')
+        lineups_by_stage = {
+            lineup.stage_id: lineup
+            for lineup in self.get_queryset().filter(stage__competition=competition)
+        }
+
+        history = []
+        for stage in stages:
+            lineup = lineups_by_stage.get(stage.id)
+            total_points = 0.0
+            items = []
+            if lineup:
+                total_points, items = calculate_lineup_score(lineup, include_items=True)
+
+            history.append({
+                'stage': stage.id,
+                'stage_name': stage.name,
+                'stage_order': stage.order,
+                'is_current': stage.is_current,
+                'is_finished': stage.finished_at is not None,
+                'lineup': lineup.id if lineup else None,
+                'has_lineup': lineup is not None,
+                'total_points': total_points,
+                'items': items,
+            })
+
+        return Response(history)
+
     @action(detail=True, methods=['get'], url_path='score-history')
     def score_history(self, request, pk=None):
         lineup = self.get_object()
@@ -99,6 +135,35 @@ class FantasyLineupViewSet(viewsets.ModelViewSet):
             'total_points': total_points,
             'items': items,
         })
+
+    def _get_history_competition(self):
+        competition_id = self.request.query_params.get('competition')
+        comp_external_id = self.request.query_params.get('competition_external_id')
+
+        if competition_id:
+            return Competition.objects.filter(id=competition_id).first()
+        if comp_external_id:
+            return Competition.objects.filter(external_id=comp_external_id).first()
+
+        current_stage = (
+            Stage.objects.select_related('competition')
+            .filter(is_current=True)
+            .order_by('-competition__season', 'order', 'id')
+            .first()
+        )
+        if current_stage:
+            return current_stage.competition
+
+        latest_lineup = (
+            self.get_queryset()
+            .select_related('stage__competition')
+            .order_by('-stage__competition__season', '-stage__order', '-stage_id')
+            .first()
+        )
+        if latest_lineup:
+            return latest_lineup.stage.competition
+
+        return Competition.objects.order_by('-season', 'name', 'id').first()
 
 
 class FantasyTransferViewSet(viewsets.ReadOnlyModelViewSet):

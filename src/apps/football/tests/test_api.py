@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from apps.football.models import (
@@ -129,6 +130,64 @@ class FootballAPITestCase(APITestCase):
             Stage.objects.filter(competition=self.competition, name="Semifinal").count(),
             1,
         )
+
+    def test_stage_state_returns_sequence_for_current_competition(self) -> None:
+        group_stage = Stage.objects.create(
+            competition=self.competition,
+            name="Fase de Grupos",
+            order=10,
+            finished_at=timezone.now(),
+        )
+        semifinal = Stage.objects.create(
+            competition=self.competition,
+            name="Semifinal",
+            order=20,
+            is_current=True,
+        )
+        self.stage.order = 30
+        self.stage.name = "Final"
+        self.stage.save(update_fields=["order", "name"])
+
+        response = self.client.get(reverse("stage-state"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["competition_finished"])
+        self.assertEqual(response.data["current_stage"]["id"], semifinal.id)
+        self.assertEqual(response.data["previous_stage"]["id"], group_stage.id)
+        self.assertEqual(response.data["next_stage"]["id"], self.stage.id)
+        self.assertEqual(response.data["last_stage"]["id"], self.stage.id)
+        self.assertFalse(response.data["last_stage"]["is_finished"])
+        self.assertTrue(response.data["last_stage"]["is_last_stage"])
+
+    def test_stage_state_marks_competition_finished_after_last_stage(self) -> None:
+        finished_at = timezone.now()
+        self.stage.order = 30
+        self.stage.finished_at = finished_at
+        self.stage.is_current = False
+        self.stage.save(update_fields=["order", "finished_at", "is_current"])
+        Stage.objects.create(
+            competition=self.competition,
+            name="Fase de Grupos",
+            order=10,
+            finished_at=finished_at,
+        )
+        Stage.objects.create(
+            competition=self.competition,
+            name="Semifinal",
+            order=20,
+            finished_at=finished_at,
+        )
+
+        response = self.client.get(
+            reverse("stage-state"), {"competition": self.competition.id}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["competition_finished"])
+        self.assertIsNone(response.data["current_stage"])
+        self.assertIsNone(response.data["next_stage"])
+        self.assertEqual(response.data["previous_stage"]["id"], self.stage.id)
+        self.assertTrue(response.data["previous_stage"]["is_finished"])
 
     def test_create_fixture(self) -> None:
         """Verifica criação de partidas."""

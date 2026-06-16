@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from apps.users.models import UserProfile
 
@@ -30,13 +31,29 @@ class UserProfileSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name', required=False, allow_blank=True)
     last_name = serializers.CharField(source='user.last_name', required=False, allow_blank=True)
     points = serializers.IntegerField(source='user.points', read_only=True)
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProfile
         fields = (
             'id', 'username', 'email', 'first_name', 'last_name',
-            'points', 'photo', 'favorite_team'
+            'points', 'photo', 'photo_url', 'favorite_team'
         )
+
+    def get_photo_url(self, obj):
+        return self._build_photo_url(obj)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['photo'] = self._build_photo_url(instance)
+        return data
+
+    def _build_photo_url(self, obj):
+        request = self.context.get('request')
+        url = obj.photo.url if obj.photo else settings.DEFAULT_PROFILE_PHOTO_URL
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})

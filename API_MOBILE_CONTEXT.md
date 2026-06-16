@@ -403,7 +403,16 @@ Campos expostos hoje pelo serializer:
     "season": 2022
   },
   "name": "Fase de Grupos",
-  "order": 1
+  "order": 1,
+  "starts_at": "2026-06-11T18:00:00-03:00",
+  "lineup_deadline_at": "2026-06-11T17:30:00-03:00",
+  "ends_at": "2026-06-19T23:30:00-03:00",
+  "finished_at": null,
+  "is_current": true,
+  "is_finished": false,
+  "is_last_stage": false,
+  "previous_stage": null,
+  "next_stage": 2
 }
 ```
 
@@ -413,11 +422,111 @@ Payload de criacao:
 {
   "competition": 1,
   "name": "Final",
-  "order": 50
+  "order": 50,
+  "starts_at": "2026-06-30T18:00:00Z",
+  "lineup_deadline_at": "2026-06-30T17:30:00Z",
+  "ends_at": "2026-06-30T23:30:00Z",
+  "finished_at": null,
+  "is_current": false
 }
 ```
 
-Observacao: existem migrations locais nao rastreadas tentando adicionar `is_current`, `starts_at`, `lineup_deadline_at`, `ends_at` e `finished_at`, mas o `models.py`, serializer e view atuais nao expoem esses campos nem actions como `current`, `set-current` ou `finish`. Para o app mobile, considere indisponivel ate o backend ser alinhado.
+Campos de fluxo:
+
+| Campo | Uso no mobile |
+| --- | --- |
+| `is_current` | indica a fase atual, onde o usuario deve escalar |
+| `finished_at` | data/hora em que a fase foi encerrada |
+| `is_finished` | `true` quando `finished_at` existe |
+| `is_last_stage` | `true` quando e a ultima fase pela ordem cadastrada |
+| `previous_stage` | ID da fase anterior, se existir |
+| `next_stage` | ID da proxima fase, se existir |
+
+### Estado da competicao/fases
+
+`GET /api/stages/state/`
+
+Filtros opcionais:
+
+| Query param | Exemplo | Efeito |
+| --- | --- | --- |
+| `competition` | `?competition=1` | busca estado da competicao pelo ID interno |
+| `competition_external_id` | `?competition_external_id=2026001` | busca estado da competicao pelo ID externo |
+
+Se nenhum filtro for enviado, a API tenta usar a competicao que possui fase atual. Se nao houver fase atual, usa a competicao mais recente.
+
+No endpoint de estado, `previous_stage` representa a ultima fase finalizada. Se a fase anterior ainda nao foi finalizada, o valor vem `null`.
+
+Resposta com competicao em andamento:
+
+```json
+{
+  "competition": {
+    "id": 1,
+    "external_id": 2026001,
+    "name": "Copa Bengala FC",
+    "season": 2026
+  },
+  "competition_finished": false,
+  "has_started": true,
+  "current_stage": {
+    "id": 2,
+    "name": "Semifinal",
+    "is_current": true,
+    "is_finished": false,
+    "is_last_stage": false,
+    "previous_stage": 1,
+    "next_stage": 3
+  },
+  "previous_stage": {
+    "id": 1,
+    "name": "Fase de Grupos",
+    "is_current": false,
+    "is_finished": true
+  },
+  "next_stage": {
+    "id": 3,
+    "name": "Final"
+  },
+  "last_stage": {
+    "id": 3,
+    "name": "Final",
+    "is_last_stage": true
+  },
+  "stages": []
+}
+```
+
+Resposta apos a ultima fase:
+
+```json
+{
+  "competition_finished": true,
+  "has_started": true,
+  "current_stage": null,
+  "previous_stage": {
+    "id": 3,
+    "name": "Final",
+    "is_finished": true,
+    "is_last_stage": true
+  },
+  "next_stage": null,
+  "last_stage": {
+    "id": 3,
+    "name": "Final",
+    "is_finished": true,
+    "is_last_stage": true
+  },
+  "stages": []
+}
+```
+
+Uso recomendado na Home:
+
+- Se `competition_finished` for `true`, mostrar que a competicao acabou.
+- Para "pontuacao da rodada anterior", usar `previous_stage.id`.
+- Para montagem de time, usar `current_stage.id`.
+- Se `current_stage` for `null` e `competition_finished` for `false`, nao existe fase atual definida no backend.
 
 ### Partidas
 
@@ -672,6 +781,7 @@ Este recurso usa `ModelViewSet`, entao possui:
 | `PATCH` | `/api/lineups/{id}/` | atualizar parcialmente |
 | `DELETE` | `/api/lineups/{id}/` | excluir |
 | `GET` | `/api/lineups/by-stage/{stage_id}/` | buscar minha escalacao de uma fase |
+| `GET` | `/api/lineups/phase-score-history/` | historico completo por fase, com 0 quando nao houve escalacao |
 | `GET` | `/api/lineups/{id}/score-history/` | historico/calculo de pontos da escalacao |
 
 Filtro de listagem:
@@ -980,6 +1090,54 @@ Chamadas uteis:
 6. Se existir, atualizar com `PATCH /api/lineups/{id}/`.
 
 ### Tela de historico/pontuacao da escalacao
+
+Para mostrar todas as fases, incluindo fases em que o usuario nao escalou e pontuou `0.0`, prefira:
+
+`GET /api/lineups/phase-score-history/`
+
+Filtros opcionais:
+
+| Query param | Exemplo | Efeito |
+| --- | --- | --- |
+| `competition` | `?competition=1` | competicao interna |
+| `competition_external_id` | `?competition_external_id=2026001` | competicao externa |
+
+Resposta:
+
+```json
+[
+  {
+    "stage": 1,
+    "stage_name": "Fase de Grupos",
+    "stage_order": 1,
+    "is_current": false,
+    "is_finished": true,
+    "lineup": 10,
+    "has_lineup": true,
+    "total_points": 259.0,
+    "items": []
+  },
+  {
+    "stage": 3,
+    "stage_name": "Final",
+    "stage_order": 3,
+    "is_current": false,
+    "is_finished": true,
+    "lineup": null,
+    "has_lineup": false,
+    "total_points": 0.0,
+    "items": []
+  }
+]
+```
+
+Uso no app:
+
+- `has_lineup=false` significa que o usuario nao escalou naquela fase.
+- Ainda assim a fase deve aparecer no historico com `total_points=0.0`.
+- Quando quiser detalhes por jogador, use `items` das fases que possuem `has_lineup=true`.
+
+Fluxo antigo, baseado apenas em escalacoes existentes:
 
 1. `GET /api/lineups/?stage={stage_id}` ou `GET /api/lineups/by-stage/{stage_id}/`.
 2. `GET /api/lineups/{id}/score-history/`.
